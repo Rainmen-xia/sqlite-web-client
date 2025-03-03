@@ -13,18 +13,22 @@ A web-based SQLite database client that allows you to manage your SQLite databas
 ## Installation
 
 ```bash
-npm install @rainmenxia/sqlite-web-client
+npm install sqlite-web-client
 ```
 
 ## Usage
 
 ```javascript
-const { startServer } = require('@rainmenxia/sqlite-web-client');
+const { startServer } = require('sqlite-web-client');
 
 // Start the server with default settings
 startServer(3000, 'path/to/your/database.db');
 
 // The web interface will be available at http://localhost:3000
+```
+
+```shell
+npx sqlite-web-client start
 ```
 
 ## API
