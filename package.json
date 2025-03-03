@@ -1,8 +1,11 @@
 {
   "name": "sqlite-web-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A web-based SQLite database client",
   "main": "server/index.js",
+  "bin": {
+    "sqlite-web-client": "./bin/cli.js"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
@@ -12,13 +15,25 @@
     "sqlite",
     "web",
     "client",
-    "database"
+    "database",
+    "sqlite3",
+    "web-client",
+    "database-client"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "rainmenxia",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rainmen-xia/sqlite-web-client.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Rainmen-xia/sqlite-web-client/issues"
+  },
+  "homepage": "https://github.com/Rainmen-xia/sqlite-web-client#readme",
   "dependencies": {
     "axios": "^1.6.7",
     "better-sqlite3": "^9.4.1",
+    "commander": "^11.1.0",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
     "express": "^4.18.2",
@@ -28,5 +43,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

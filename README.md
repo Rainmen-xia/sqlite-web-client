@@ -1,132 +1,59 @@
-# SQLite Web 客户端
+# SQLite Web Client
 
-一个功能强大的 SQLite 数据库 Web 管理工具，支持数据导入导出、AI 辅助查询等功能。
+A web-based SQLite database client that allows you to manage your SQLite databases through a web interface.
 
-## 功能特性
+## Features
 
-- 📊 数据库管理
-  - 查看所有表和表结构
-  - 分页浏览表数据
-  - 执行自定义 SQL 查询
+- Web-based interface for SQLite database management
+- Support for executing SQL queries
+- Import data from CSV and Excel files
+- Export query results
+- Simple and intuitive user interface
 
-- 📥 数据导入
-  - 支持导入 Excel 文件（.xlsx, .xls）
-  - 支持导入 CSV 文件
-  - 自动识别文件编码（支持 UTF-8、GBK 等）
-  - 支持预览数据和自定义列配置
-  - 支持设置列的数据类型（TEXT、INTEGER、REAL等）
+## Installation
 
-- 📤 数据导出
-  - 将查询结果导出为 CSV 文件
-  - 自动处理特殊字符和编码
-
-- 🤖 AI 辅助查询
-  - 集成 LLM（大语言模型）支持
-  - 自然语言转换为 SQL 查询
-  - 支持自定义 LLM 服务配置
-    - 可配置 API 令牌
-    - 可配置服务端点 URL
-    - 可配置模型名称
-
-## 系统要求
-
-- Node.js >= 14.0.0
-- 支持现代浏览器（Chrome、Firefox、Safari、Edge）
-
-## 快速开始
-
-1. 克隆项目并安装依赖：
 ```bash
-git clone [项目地址]
+npm install @rainmenxia/sqlite-web-client
+```
+
+## Usage
+
+```javascript
+const { startServer } = require('@rainmenxia/sqlite-web-client');
+
+// Start the server with default settings
+startServer(3000, 'path/to/your/database.db');
+
+// The web interface will be available at http://localhost:3000
+```
+
+## API
+
+### startServer(port, dbPath)
+
+Starts the SQLite Web Client server.
+
+- `port` (number): The port number to run the server on (default: 3000)
+- `dbPath` (string): Path to the SQLite database file
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/Rainmen-xia/sqlite-web-client.git
+
+# Install dependencies
 cd sqlite-web-client
 npm install
-```
 
-2. 启动服务器：
-```bash
-# 开发模式（支持自动重启）
+# Start development server
 npm run dev
-
-# 生产模式
-npm start
 ```
 
-默认配置：
-- 服务器端口：3000
-- 数据库文件：./sqlite-web-client.db
+## License
 
-可以通过环境变量自定义配置：
-```bash
-# 自定义端口和数据库路径
-PORT=8080 DB_PATH=/path/to/your/database.db npm start
-```
+MIT
 
-## 使用说明
+## Author
 
-### 数据库浏览
-
-1. 打开浏览器访问 http://localhost:3000
-2. 在左侧表格列表中选择要查看的表
-3. 可以查看表结构和数据内容
-4. 支持分页浏览和排序
-
-### Excel/CSV 导入
-
-1. 切换到"导入"标签页
-2. 选择要导入的 Excel 或 CSV 文件（支持 .xlsx、.xls、.csv）
-3. 预览数据并配置：
-   - 设置目标表名
-   - 配置列名和数据类型
-   - 可以添加或删除列
-4. 点击"导入数据"开始导入
-
-注意事项：
-- 文件大小限制为 10MB
-- 第一行将被视为列名
-- 支持 UTF-8 和 GBK 编码的 CSV 文件
-
-### 查询和导出
-
-1. 切换到"查询"标签页
-2. 输入 SQL 查询语句
-3. 点击"执行"运行查询
-4. 查看结果后，可以点击"导出CSV"保存数据
-
-### AI 辅助查询
-
-1. 在查询页面打开 AI 助手面板
-2. 配置 LLM 服务：
-   - 点击"配置令牌"按钮
-   - 填写 API 令牌（必填）
-   - 填写服务端点 URL（可选，有默认值）
-   - 填写模型名称（可选，有默认值）
-3. 用自然语言描述你的查询需求
-4. AI 助手会生成对应的 SQL 语句
-5. 可以直接使用生成的 SQL 或进行修改后执行
-
-## 安全说明
-
-- 请勿在生产环境中使用默认配置
-- 建议配置访问控制和身份验证
-- 定期备份数据库文件
-- 请妥善保管 LLM API 令牌，不要泄露给他人
-
-## 常见问题
-
-1. 导入文件失败
-   - 检查文件格式是否正确
-   - 确保文件大小在限制范围内
-   - 检查文件编码（建议使用 UTF-8）
-
-2. AI 助手无法使用
-   - 确认已正确配置 API 令牌
-   - 检查网络连接
-   - 查看浏览器控制台是否有错误信息
-
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-## 许可证
-
-ISC License 
+rainmenxia 
