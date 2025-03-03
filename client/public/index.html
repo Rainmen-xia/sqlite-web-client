@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQLite Web 客户端</title>
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Vue.js -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.js"></script>
+  <!-- 引入 Axios -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9fafb;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    th {
+      background-color: #f3f4f6;
+      font-weight: 600;
+    }
+    tr:hover {
+      background-color: #f3f4f6;
+    }
+    .tab-active {
+      border-bottom: 2px solid #3b82f6;
+      color: #3b82f6;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background-color: #3b82f6;
+      color: white;
+    }
+    .btn-primary:hover {
+      background-color: #2563eb;
+    }
+    .btn-secondary {
+      background-color: #e5e7eb;
+      color: #374151;
+    }
+    .btn-secondary:hover {
+      background-color: #d1d5db;
+    }
+    .form-input {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      width: 100%;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow">
+      <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-gray-900">SQLite Web 客户端</h1>
+        <div class="flex items-center space-x-4">
+          <span class="text-sm text-gray-500">数据库: {{ databaseInfo.path || '未连接' }}</span>
+          <span class="text-sm text-gray-500">版本: {{ databaseInfo.version || '未知' }}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <!-- 标签页导航 -->
+      <div class="border-b border-gray-200 mb-6">
+        <nav class="flex space-x-8">
+          <button 
+            @click="activeTab = 'tables'" 
+            :class="['px-3 py-2 text-sm font-medium', activeTab === 'tables' ? 'tab-active' : 'text-gray-500 hover:text-gray-700']">
+            表
+          </button>
+          <button 
+            @click="activeTab = 'query'" 
+            :class="['px-3 py-2 text-sm font-medium', activeTab === 'query' ? 'tab-active' : 'text-gray-500 hover:text-gray-700']">
+            查询
+          </button>
+          <button 
+            @click="activeTab = 'import'" 
+            :class="['px-3 py-2 text-sm font-medium', activeTab === 'import' ? 'tab-active' : 'text-gray-500 hover:text-gray-700']">
+            导入 Excel
+          </button>
+        </nav>
+      </div>
+
+      <!-- 表格列表和数据 -->
+      <div v-if="activeTab === 'tables'" class="grid grid-cols-12 gap-6">
+        <!-- 左侧表格列表 -->
+        <div class="col-span-3 bg-white p-4 rounded shadow">
+          <h2 class="text-lg font-medium mb-4">表</h2>
+          <ul class="space-y-1">
+            <li v-for="table in tables" :key="table" 
+                @click="selectTable(table)"
+                :class="['px-3 py-2 rounded cursor-pointer', selectedTable === table ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100']">
+              {{ table }}
+            </li>
+          </ul>
+        </div>
+
+        <!-- 右侧表格数据 -->
+        <div class="col-span-9 bg-white p-4 rounded shadow" v-if="selectedTable">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-medium">{{ selectedTable }}</h2>
+            <div class="flex space-x-2">
+              <button class="btn btn-secondary" @click="showSchema = !showSchema">
+                {{ showSchema ? '隐藏结构' : '显示结构' }}
+              </button>
+              <button class="btn btn-primary" @click="refreshTableData">刷新</button>
+            </div>
+          </div>
+
+          <!-- 表结构 -->
+          <div v-if="showSchema && tableSchema.length" class="mb-6">
+            <h3 class="text-md font-medium mb-2">表结构</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>列名</th>
+                    <th>类型</th>
+                    <th>非空</th>
+                    <th>默认值</th>
+                    <th>主键</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="column in tableSchema" :key="column.name">
+                    <td>{{ column.name }}</td>
+                    <td>{{ column.type }}</td>
+                    <td>{{ column.notnull ? '是' : '否' }}</td>
+                    <td>{{ column.dflt_value || '-' }}</td>
+                    <td>{{ column.pk ? '是' : '否' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 表数据 -->
+          <div v-if="tableData.length">
+            <h3 class="text-md font-medium mb-2">数据 ({{ pagination.total }} 行)</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th v-for="column in tableSchema" :key="column.name">
+                      {{ column.name }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, index) in tableData" :key="index">
+                    <td v-for="column in tableSchema" :key="column.name">
+                      {{ row[column.name] }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 分页 -->
+            <div class="flex justify-between items-center mt-4">
+              <div>
+                <span class="text-sm text-gray-500">
+                  显示 {{ (pagination.page - 1) * pagination.limit + 1 }} 到 
+                  {{ Math.min(pagination.page * pagination.limit, pagination.total) }} 
+                  共 {{ pagination.total }} 行
+                </span>
+              </div>
+              <div class="flex space-x-2">
+                <button 
+                  class="btn btn-secondary" 
+                  :disabled="pagination.page === 1"
+                  @click="changePage(pagination.page - 1)">
+                  上一页
+                </button>
+                <button 
+                  class="btn btn-secondary" 
+                  :disabled="pagination.page * pagination.limit >= pagination.total"
+                  @click="changePage(pagination.page + 1)">
+                  下一页
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-8 text-gray-500">
+            表中没有数据
+          </div>
+        </div>
+        <div class="col-span-9 bg-white p-4 rounded shadow flex items-center justify-center" v-else>
+          <p class="text-gray-500">请选择一个表</p>
+        </div>
+      </div>
+
+      <!-- 查询面板 -->
+      <div v-if="activeTab === 'query'" class="bg-white p-6 rounded shadow">
+        <h2 class="text-lg font-medium mb-4">执行 SQL 查询</h2>
+        
+        <!-- 添加LLM聊天功能切换 -->
+        <div class="mb-4 flex justify-end">
+          <button 
+            @click="showChatPanel = !showChatPanel" 
+            class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center">
+            <span v-if="showChatPanel">隐藏AI助手</span>
+            <span v-else>显示AI助手</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+        
+        <div class="grid grid-cols-12 gap-4">
+          <!-- 聊天面板 -->
+          <div v-if="showChatPanel" class="col-span-12 md:col-span-4 border rounded p-4 mb-4 bg-gray-50">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-md font-medium">AI SQL助手</h3>
+              <div>
+                <button 
+                  @click="openTokenConfig" 
+                  class="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                  title="配置LLM API令牌">
+                  配置令牌
+                </button>
+              </div>
+            </div>
+            
+            <!-- 令牌配置对话框 -->
+            <div v-if="showTokenConfig" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+              <div class="bg-white p-6 rounded shadow-lg max-w-md w-full">
+                <h3 class="text-lg font-medium mb-4">配置LLM服务</h3>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API令牌</label>
+                    <input 
+                      type="text" 
+                      v-model="llmToken" 
+                      class="form-input" 
+                      placeholder="输入您的LLM API令牌" />
+                    <p class="mt-1 text-xs text-gray-500">令牌格式: your_token@3015</p>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API URL</label>
+                    <input 
+                      type="text" 
+                      v-model="llmUrl" 
+                      class="form-input" 
+                      placeholder="输入LLM API的URL" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">模型名称</label>
+                    <input 
+                      type="text" 
+                      v-model="llmModel" 
+                      class="form-input" 
+                      placeholder="输入要使用的模型名称" />
+                  </div>
+                </div>
+                <div class="flex justify-end space-x-2 mt-6">
+                  <button 
+                    @click="showTokenConfig = false" 
+                    class="btn btn-secondary">
+                    取消
+                  </button>
+                  <button 
+                    @click="saveToken" 
+                    class="btn btn-primary">
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 聊天消息区域 -->
+            <div class="h-64 overflow-y-auto mb-4 border rounded bg-white p-2" ref="chatMessagesRef">
+              <div v-for="(message, index) in chatMessages" :key="index" class="mb-2">
+                <div 
+                  :class="[
+                    'p-2 rounded max-w-[90%] break-words', 
+                    message.role === 'user' 
+                      ? 'bg-blue-100 text-blue-800 ml-auto' 
+                      : message.role === 'assistant' 
+                        ? 'bg-gray-100 text-gray-800' 
+                        : 'bg-yellow-50 text-yellow-800 text-xs italic'
+                  ]">
+                  <div v-if="message.role === 'assistant' && message.sql" class="mb-2">
+                    <pre class="bg-gray-800 text-white p-2 rounded text-xs overflow-x-auto">{{ message.sql }}</pre>
+                    <div class="flex justify-end mt-1">
+                      <button 
+                        @click="useSqlFromAssistant(message.sql)" 
+                        class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        使用此SQL
+                      </button>
+                    </div>
+                  </div>
+                  <div>{{ message.content }}</div>
+                </div>
+              </div>
+              <div v-if="isTyping" class="p-2 bg-gray-100 text-gray-800 rounded max-w-[90%] animate-pulse">
+                AI正在思考...
+              </div>
+            </div>
+            
+            <!-- 聊天输入区域 -->
+            <div class="flex">
+              <input 
+                type="text" 
+                v-model="userMessage" 
+                @keyup.enter="sendMessage"
+                class="form-input flex-grow mr-2" 
+                placeholder="描述您需要的SQL查询..." 
+                :disabled="!llmToken || isTyping" />
+              <button 
+                @click="sendMessage" 
+                class="btn btn-primary" 
+                :disabled="!userMessage.trim() || !llmToken || isTyping">
+                发送
+              </button>
+            </div>
+            
+            <!-- 提示信息 -->
+            <div v-if="!llmToken" class="mt-2 text-xs text-red-500">
+              请先配置LLM API令牌
+            </div>
+            <div v-if="chatError" class="mt-2 text-xs text-red-500">
+              {{ chatError }}
+            </div>
+          </div>
+          
+          <!-- SQL查询区域 -->
+          <div :class="['col-span-12', showChatPanel ? 'md:col-span-8' : '']">
+            <div class="mb-4">
+              <div class="flex justify-between items-center mb-2">
+                <button 
+                  @click="showSqlHistory = !showSqlHistory" 
+                  class="text-sm flex items-center text-blue-600 hover:text-blue-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ showSqlHistory ? '隐藏历史记录' : '显示历史记录' }}
+                </button>
+                <button 
+                  v-if="showSqlHistory && sqlHistory.length > 0" 
+                  @click="clearSqlHistory" 
+                  class="text-sm text-red-600 hover:text-red-800">
+                  清空历史记录
+                </button>
+              </div>
+              
+              <!-- SQL历史记录 -->
+              <div v-if="showSqlHistory" class="mb-4 border rounded p-2 bg-gray-50 max-h-40 overflow-y-auto">
+                <div v-if="sqlHistory.length === 0" class="text-center text-gray-500 py-2">
+                  暂无历史记录
+                </div>
+                <div v-else>
+                  <div 
+                    v-for="(item, index) in sqlHistory" 
+                    :key="index" 
+                    class="p-2 hover:bg-gray-100 cursor-pointer rounded mb-1 border-b last:border-b-0"
+                    @click="loadSqlFromHistory(item.sql)">
+                    <div class="flex justify-between items-start">
+                      <pre class="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words max-w-[90%]">{{ item.sql.length > 100 ? item.sql.substring(0, 100) + '...' : item.sql }}</pre>
+                      <span class="text-xs text-gray-500">{{ new Date(item.timestamp).toLocaleString() }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <textarea 
+                v-model="sqlQuery" 
+                class="form-input font-mono" 
+                rows="6" 
+                placeholder="输入 SQL 查询语句..."></textarea>
+            </div>
+            <div class="flex justify-end mb-6">
+              <button class="btn btn-primary" @click="executeQuery">执行</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 查询结果 -->
+        <div v-if="queryResult.length" class="mt-6">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-md font-medium">查询结果 ({{ queryResult.length }} 行)</h3>
+            <button 
+              @click="exportToCsv" 
+              :disabled="isExporting"
+              class="flex items-center px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg v-if="!isExporting" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {{ isExporting ? '导出中...' : '导出CSV' }}
+            </button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th v-for="(_, key) in queryResult[0]" :key="key">{{ key }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, index) in queryResult" :key="index">
+                  <td v-for="(value, key) in row" :key="key">{{ value }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div v-else-if="queryExecuted" class="mt-6">
+          <div v-if="queryError" class="bg-red-100 p-4 rounded text-red-700">
+            <p class="font-medium">错误</p>
+            <p>{{ queryError }}</p>
+          </div>
+          <div v-else class="bg-green-100 p-4 rounded text-green-700">
+            <p class="font-medium">执行成功</p>
+            <p v-if="queryChanges !== null">影响了 {{ queryChanges }} 行</p>
+            <p v-if="queryLastId !== null">最后插入的 ID: {{ queryLastId }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Excel 导入面板 -->
+      <div v-if="activeTab === 'import'" class="bg-white p-6 rounded shadow">
+        <h2 class="text-lg font-medium mb-4">从 Excel/CSV 导入数据</h2>
+        
+        <!-- 步骤 1: 上传文件 -->
+        <div v-if="importStep === 1">
+          <p class="mb-4 text-gray-600">选择一个 Excel 或 CSV 文件上传，第一行将被视为列名。</p>
+          <div class="mb-4">
+            <input 
+              type="file" 
+              ref="fileInput"
+              @change="handleFileChange" 
+              accept=".xlsx,.xls,.csv" 
+              class="block w-full text-sm text-gray-500
+                     file:mr-4 file:py-2 file:px-4
+                     file:rounded file:border-0
+                     file:text-sm file:font-semibold
+                     file:bg-blue-50 file:text-blue-700
+                     hover:file:bg-blue-100" />
+            <p class="mt-2 text-xs text-gray-500">支持的文件格式: .xlsx, .xls (Excel 97-2003), .csv</p>
+            <p class="mt-1 text-xs text-gray-500">最大文件大小: 10MB</p>
+          </div>
+          <div v-if="uploadError" class="mb-4 bg-red-100 p-3 rounded text-red-700 text-sm">
+            <p class="font-medium">上传失败</p>
+            <p>{{ uploadError }}</p>
+          </div>
+          <div class="flex justify-end">
+            <button 
+              class="btn btn-primary" 
+              @click="uploadExcel" 
+              :disabled="!selectedFile || isUploading">
+              {{ isUploading ? '上传中...' : '上传' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 步骤 2: 预览和配置 -->
+        <div v-if="importStep === 2">
+          <div class="mb-6">
+            <h3 class="text-md font-medium mb-2">文件预览</h3>
+            <p class="text-sm text-gray-500 mb-4">
+              文件包含 {{ excelData.totalRows }} 行数据，下面显示前 10 行预览。
+            </p>
+            
+            <div class="table-container mb-6">
+              <table>
+                <thead>
+                  <tr>
+                    <th v-for="header in excelData.headers" :key="header">{{ header }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, index) in excelData.data" :key="index">
+                    <td v-for="header in excelData.headers" :key="header">{{ row[header] }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <h3 class="text-md font-medium mb-2">配置导入</h3>
+            <div class="grid grid-cols-1 gap-4 mb-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">表名</label>
+                <input 
+                  type="text" 
+                  v-model="importTableName" 
+                  class="form-input" 
+                  placeholder="输入新表名" />
+                <p class="mt-1 text-xs text-gray-500">表名只能包含字母、数字和下划线</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h4 class="text-sm font-medium text-gray-700 mb-2">列配置</h4>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Excel/CSV 列名</th>
+                      <th>SQLite 列名</th>
+                      <th>数据类型</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(col, index) in columnConfig" :key="index">
+                      <td>{{ col.sourceHeader || '新增列' }}</td>
+                      <td>
+                        <input 
+                          type="text" 
+                          v-model="columnConfig[index].name" 
+                          class="form-input" />
+                      </td>
+                      <td>
+                        <select v-model="columnConfig[index].type" class="form-input">
+                          <option value="TEXT">TEXT</option>
+                          <option value="INTEGER">INTEGER</option>
+                          <option value="REAL">REAL</option>
+                          <option value="BLOB">BLOB</option>
+                          <option value="NULL">NULL</option>
+                        </select>
+                      </td>
+                      <td>
+                        <button 
+                          @click="removeColumn(index)" 
+                          class="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                          title="删除此列">
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="mt-3">
+                <button 
+                  @click="addNewColumn()" 
+                  class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                  + 添加新列
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="importConfigError" class="mb-4 bg-red-100 p-3 rounded text-red-700 text-sm">
+            <p class="font-medium">配置错误</p>
+            <p>{{ importConfigError }}</p>
+          </div>
+
+          <div class="flex justify-between">
+            <button class="btn btn-secondary" @click="importStep = 1">返回</button>
+            <button 
+              class="btn btn-primary" 
+              @click="importExcel" 
+              :disabled="isImporting">
+              {{ isImporting ? '导入中...' : '导入数据' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 步骤 3: 导入结果 -->
+        <div v-if="importStep === 3">
+          <div v-if="importError" class="bg-red-100 p-4 rounded text-red-700 mb-6">
+            <p class="font-medium">导入失败</p>
+            <p>{{ importError }}</p>
+          </div>
+          <div v-else class="bg-green-100 p-4 rounded text-green-700 mb-6">
+            <p class="font-medium">导入成功</p>
+            <p>{{ importResult }}</p>
+          </div>
+          <div class="flex justify-end">
+            <button class="btn btn-primary" @click="resetImport">完成</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t border-gray-200 py-4">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <p class="text-center text-sm text-gray-500">
+          SQLite Web 客户端 &copy; 2024
+        </p>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, onMounted, computed, watch } = Vue;
+
+    createApp({
+      setup() {
+        // 状态
+        const activeTab = ref('tables');
+        const tables = ref([]);
+        const selectedTable = ref(null);
+        const tableSchema = ref([]);
+        const tableData = ref([]);
+        const showSchema = ref(true);
+        const databaseInfo = reactive({
+          path: '',
+          version: ''
+        });
+        const pagination = reactive({
+          page: 1,
+          limit: 50,
+          total: 0
+        });
+
+        // 查询相关
+        const sqlQuery = ref('');
+        const queryResult = ref([]);
+        const queryExecuted = ref(false);
+        const queryError = ref(null);
+        const queryChanges = ref(null);
+        const queryLastId = ref(null);
+        const sqlHistory = ref([]);
+        const showSqlHistory = ref(false);
+        const maxHistoryItems = 10; // 最多保存10条历史记录
+        const isExporting = ref(false); // 导出状态
+
+        // Excel 导入相关
+        const importStep = ref(1);
+        const selectedFile = ref(null);
+        const uploadError = ref(null);
+        const isUploading = ref(false);
+        const importConfigError = ref(null);
+        const isImporting = ref(false);
+        const excelData = reactive({
+          headers: [],
+          data: [],
+          totalRows: 0,
+          filePath: ''
+        });
+        const importTableName = ref('');
+        const columnConfig = ref([]);
+        const importError = ref(null);
+        const importResult = ref('');
+        const fileInput = ref(null);
+
+        // 聊天相关
+        const showChatPanel = ref(false);
+        const chatMessages = ref([]);
+        const userMessage = ref('');
+        const llmToken = ref('');
+        const llmUrl = ref('https://api.deepseek.com/chat/completions');
+        const llmModel = ref('deepseek-chat');
+        const chatError = ref(null);
+        const isTyping = ref(false);
+        const showTokenConfig = ref(false);
+        const chatMessagesRef = ref(null);
+
+        // 获取数据库信息
+        const fetchDatabaseInfo = async () => {
+          try {
+            const response = await axios.get('/api/info');
+            databaseInfo.version = response.data.version;
+            tables.value = response.data.tables;
+          } catch (error) {
+            console.error('获取数据库信息失败:', error);
+          }
+        };
+
+        // 获取表列表
+        const fetchTables = async () => {
+          try {
+            const response = await axios.get('/api/tables');
+            tables.value = response.data;
+          } catch (error) {
+            console.error('获取表列表失败:', error);
+          }
+        };
+
+        // 选择表
+        const selectTable = async (tableName) => {
+          selectedTable.value = tableName;
+          pagination.page = 1;
+          await fetchTableSchema(tableName);
+          await fetchTableData(tableName);
+        };
+
+        // 获取表结构
+        const fetchTableSchema = async (tableName) => {
+          try {
+            const response = await axios.get(`/api/tables/${tableName}/schema`);
+            tableSchema.value = response.data;
+          } catch (error) {
+            console.error('获取表结构失败:', error);
+          }
+        };
+
+        // 获取表数据
+        const fetchTableData = async (tableName) => {
+          try {
+            const response = await axios.get(`/api/tables/${tableName}/data`, {
+              params: {
+                page: pagination.page,
+                limit: pagination.limit
+              }
+            });
+            tableData.value = response.data.data;
+            pagination.total = response.data.pagination.total;
+          } catch (error) {
+            console.error('获取表数据失败:', error);
+          }
+        };
+
+        // 刷新表数据
+        const refreshTableData = async () => {
+          if (selectedTable.value) {
+            await fetchTableData(selectedTable.value);
+          }
+        };
+
+        // 切换页码
+        const changePage = (page) => {
+          pagination.page = page;
+          fetchTableData(selectedTable.value);
+        };
+
+        // 执行 SQL 查询
+        const executeQuery = async () => {
+          if (!sqlQuery.value.trim()) return;
+
+          queryExecuted.value = false;
+          queryError.value = null;
+          queryResult.value = [];
+          queryChanges.value = null;
+          queryLastId.value = null;
+
+          try {
+            const response = await axios.post('/api/query', {
+              sql: sqlQuery.value
+            });
+            
+            queryExecuted.value = true;
+            
+            // 保存到历史记录
+            saveSqlToHistory(sqlQuery.value);
+            
+            if (response.data.result) {
+              queryResult.value = response.data.result;
+            } else {
+              queryChanges.value = response.data.changes;
+              queryLastId.value = response.data.lastInsertRowid;
+              // 如果是修改操作，刷新表列表
+              fetchTables();
+            }
+          } catch (error) {
+            queryExecuted.value = true;
+            queryError.value = error.response?.data?.error || '执行查询失败';
+          }
+        };
+        
+        // 保存SQL到历史记录
+        const saveSqlToHistory = (sql) => {
+          // 如果SQL已经在历史记录中，先移除它
+          const index = sqlHistory.value.findIndex(item => item.sql === sql);
+          if (index !== -1) {
+            sqlHistory.value.splice(index, 1);
+          }
+          
+          // 添加到历史记录的开头
+          sqlHistory.value.unshift({
+            sql,
+            timestamp: new Date().toISOString()
+          });
+          
+          // 限制历史记录数量
+          if (sqlHistory.value.length > maxHistoryItems) {
+            sqlHistory.value = sqlHistory.value.slice(0, maxHistoryItems);
+          }
+          
+          // 保存到本地存储
+          localStorage.setItem('sqlHistory', JSON.stringify(sqlHistory.value));
+        };
+        
+        // 从历史记录中加载SQL
+        const loadSqlFromHistory = (sql) => {
+          sqlQuery.value = sql;
+        };
+        
+        // 清空历史记录
+        const clearSqlHistory = () => {
+          sqlHistory.value = [];
+          localStorage.removeItem('sqlHistory');
+        };
+
+        // 处理文件选择
+        const handleFileChange = (event) => {
+          uploadError.value = null;
+          selectedFile.value = event.target.files[0];
+          
+          // 验证文件类型
+          if (selectedFile.value) {
+            const fileName = selectedFile.value.name.toLowerCase();
+            if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls') && !fileName.endsWith('.csv')) {
+              uploadError.value = '请选择有效的Excel或CSV文件 (.xlsx, .xls 或 .csv)';
+              selectedFile.value = null;
+              if (fileInput.value) {
+                fileInput.value.value = '';
+              }
+              return;
+            }
+            
+            // 验证文件大小
+            if (selectedFile.value.size > 10 * 1024 * 1024) { // 10MB
+              uploadError.value = '文件大小超过限制 (最大10MB)';
+              selectedFile.value = null;
+              if (fileInput.value) {
+                fileInput.value.value = '';
+              }
+              return;
+            }
+          }
+        };
+
+        // 上传 Excel 文件
+        const uploadExcel = async () => {
+          if (!selectedFile.value) return;
+          
+          uploadError.value = null;
+          isUploading.value = true;
+          
+          const formData = new FormData();
+          formData.append('file', selectedFile.value);
+          
+          try {
+            const response = await axios.post('/api/excel/upload', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              }
+            });
+            
+            excelData.headers = response.data.headers;
+            excelData.data = response.data.data;
+            excelData.totalRows = response.data.totalRows;
+            excelData.filePath = response.data.filePath;
+            
+            // 初始化列配置
+            columnConfig.value = excelData.headers.map(header => ({
+              sourceHeader: header,
+              name: header.replace(/\s+/g, '_').toLowerCase(),
+              type: 'TEXT'
+            }));
+            
+            // 设置默认表名
+            importTableName.value = selectedFile.value.name
+              .replace(/\.[^/.]+$/, '') // 移除扩展名
+              .replace(/\s+/g, '_')
+              .toLowerCase();
+            
+            importStep.value = 2;
+          } catch (error) {
+            uploadError.value = error.response?.data?.error || '上传文件失败，请检查文件格式是否正确';
+          } finally {
+            isUploading.value = false;
+          }
+        };
+
+        // 添加新列
+        const addNewColumn = () => {
+          columnConfig.value.push({
+            sourceHeader: null,
+            name: `column_${columnConfig.value.length + 1}`,
+            type: 'TEXT'
+          });
+        };
+        
+        // 删除列
+        const removeColumn = (index) => {
+          columnConfig.value.splice(index, 1);
+        };
+
+        // 导入 Excel 数据
+        const importExcel = async () => {
+          importConfigError.value = null;
+          
+          // 验证表名
+          if (!importTableName.value) {
+            importConfigError.value = '请填写表名';
+            return;
+          }
+          
+          if (!/^[a-zA-Z0-9_]+$/.test(importTableName.value)) {
+            importConfigError.value = '表名只能包含字母、数字和下划线';
+            return;
+          }
+          
+          // 验证列配置
+          for (const col of columnConfig.value) {
+            if (!col.name) {
+              importConfigError.value = '请为所有列填写列名';
+              return;
+            }
+            
+            if (!/^[a-zA-Z0-9_]+$/.test(col.name)) {
+              importConfigError.value = `列名 "${col.name}" 无效，只能包含字母、数字和下划线`;
+              return;
+            }
+          }
+          
+          // 检查列名是否有重复
+          const columnNames = columnConfig.value.map(col => col.name);
+          const uniqueColumnNames = [...new Set(columnNames)];
+          if (columnNames.length !== uniqueColumnNames.length) {
+            importConfigError.value = '列名不能重复';
+            return;
+          }
+          
+          isImporting.value = true;
+          
+          try {
+            const response = await axios.post('/api/excel/import', {
+              filePath: excelData.filePath,
+              tableName: importTableName.value,
+              columns: columnConfig.value
+            });
+            
+            importResult.value = response.data.message;
+            importError.value = null;
+            importStep.value = 3;
+            
+            // 刷新表列表
+            fetchTables();
+          } catch (error) {
+            importError.value = error.response?.data?.error || '导入失败';
+            importStep.value = 3;
+          } finally {
+            isImporting.value = false;
+          }
+        };
+
+        // 重置导入状态
+        const resetImport = () => {
+          importStep.value = 1;
+          selectedFile.value = null;
+          uploadError.value = null;
+          importConfigError.value = null;
+          isUploading.value = false;
+          isImporting.value = false;
+          excelData.headers = [];
+          excelData.data = [];
+          excelData.totalRows = 0;
+          excelData.filePath = '';
+          importTableName.value = '';
+          columnConfig.value = [];
+          importError.value = null;
+          importResult.value = '';
+          if (fileInput.value) {
+            fileInput.value.value = '';
+          }
+        };
+
+        // 从本地存储加载令牌和SQL历史记录
+        onMounted(() => {
+          fetchDatabaseInfo();
+          
+          // 加载保存的配置
+          const savedToken = localStorage.getItem('llmToken');
+          const savedUrl = localStorage.getItem('llmUrl');
+          const savedModel = localStorage.getItem('llmModel');
+          
+          if (savedToken) {
+            llmToken.value = savedToken;
+          }
+          if (savedUrl) {
+            llmUrl.value = savedUrl;
+          }
+          if (savedModel) {
+            llmModel.value = savedModel;
+          }
+          
+          // 加载SQL历史记录
+          const savedHistory = localStorage.getItem('sqlHistory');
+          if (savedHistory) {
+            try {
+              sqlHistory.value = JSON.parse(savedHistory);
+            } catch (error) {
+              console.error('解析SQL历史记录失败:', error);
+              localStorage.removeItem('sqlHistory');
+            }
+          }
+        });
+
+        // 打开令牌配置对话框
+        const openTokenConfig = () => {
+          showTokenConfig.value = true;
+        };
+
+        // 保存令牌
+        const saveToken = () => {
+          if (llmToken.value) {
+            localStorage.setItem('llmToken', llmToken.value);
+          } else {
+            localStorage.removeItem('llmToken');
+          }
+          
+          if (llmUrl.value) {
+            localStorage.setItem('llmUrl', llmUrl.value);
+          } else {
+            localStorage.removeItem('llmUrl');
+          }
+          
+          if (llmModel.value) {
+            localStorage.setItem('llmModel', llmModel.value);
+          } else {
+            localStorage.removeItem('llmModel');
+          }
+          
+          showTokenConfig.value = false;
+        };
+
+        // 发送消息到LLM
+        const sendMessage = async () => {
+          if (!userMessage.value.trim() || !llmToken.value || isTyping.value) return;
+          
+          const message = userMessage.value;
+          userMessage.value = '';
+          chatError.value = null;
+          
+          // 添加用户消息到聊天
+          chatMessages.value.push({
+            role: 'user',
+            content: message
+          });
+          
+          // 添加系统消息，提供数据库上下文
+          let systemMessage = {
+            role: 'system',
+            content: '你是一个SQL专家助手，帮助用户生成SQLite查询语句。'
+          };
+          
+          try {
+            // 构建数据库结构信息
+            let dbInfo = '数据库中的表：\n';
+            for (const table of tables.value) {
+              dbInfo += `- ${table}\n`;
+              
+              // 获取表结构
+              const response = await axios.get(`/api/tables/${table}/schema`);
+              const schema = response.data;
+              
+              dbInfo += `  列：\n`;
+              for (const column of schema) {
+                dbInfo += `  - ${column.name} (${column.type})${column.pk ? ' [主键]' : ''}${column.notnull ? ' [非空]' : ''}\n`;
+              }
+              dbInfo += '\n';
+            }
+            
+            // 更新系统消息
+            systemMessage.content += `\n\n${dbInfo}\n\n请根据用户的需求生成SQLite查询语句。回复时，请先解释你的理解，然后提供SQL查询语句，并用三个反引号包裹SQL代码。`;
+          } catch (error) {
+            console.error('获取数据库结构失败:', error);
+            systemMessage.content += '\n\n请根据用户的需求生成SQLite查询语句。回复时，请先解释你的理解，然后提供SQL查询语句，并用三个反引号包裹SQL代码。';
+          }
+          
+          // 准备发送到LLM的消息
+          const messages = [
+            systemMessage,
+            ...chatMessages.value.filter(msg => msg.role !== 'system')
+          ];
+          
+          // 显示加载状态
+          isTyping.value = true;
+          
+          try {
+            // 调用LLM API
+            const response = await axios.post('/api/chat', {
+              token: llmToken.value,
+              url: llmUrl.value,
+              model: llmModel.value,
+              messages: messages
+            });
+            
+            // 处理LLM响应
+            if (response.data && response.data.choices && response.data.choices.length > 0) {
+              const assistantMessage = response.data.choices[0].message;
+              
+              // 提取SQL代码
+              let content = assistantMessage.content;
+              let sql = null;
+              
+              // 尝试从回复中提取SQL代码
+              const sqlMatch = content.match(/```sql\n([\s\S]*?)```/) || content.match(/```([\s\S]*?)```/);
+              if (sqlMatch && sqlMatch[1]) {
+                sql = sqlMatch[1].trim();
+              }
+              
+              // 添加助手消息到聊天
+              chatMessages.value.push({
+                role: 'assistant',
+                content: content,
+                sql: sql
+              });
+              
+              // 滚动到底部
+              setTimeout(() => {
+                if (chatMessagesRef.value) {
+                  chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
+                }
+              }, 100);
+            } else {
+              chatError.value = '无法获取LLM响应';
+            }
+          } catch (error) {
+            console.error('LLM请求失败:', error);
+            chatError.value = error.response?.data?.error || '与LLM通信失败';
+          } finally {
+            isTyping.value = false;
+          }
+        };
+
+        // 使用助手生成的SQL
+        const useSqlFromAssistant = (sql) => {
+          sqlQuery.value = sql;
+        };
+        
+        // 导出查询结果为CSV文件
+        const exportToCsv = () => {
+          if (!queryResult.value || queryResult.value.length === 0) return;
+          
+          try {
+            isExporting.value = true;
+            
+            // 获取列名
+            const headers = Object.keys(queryResult.value[0]);
+            
+            // 创建CSV内容
+            let csvContent = headers.join(',') + '\n';
+            
+            // 使用setTimeout来避免UI阻塞
+            setTimeout(() => {
+              try {
+                // 添加数据行
+                queryResult.value.forEach(row => {
+                  const rowValues = headers.map(header => {
+                    // 处理值中的特殊字符
+                    const value = row[header] === null || row[header] === undefined ? '' : String(row[header]);
+                    // 如果值包含逗号、双引号或换行符，需要用双引号包裹并处理内部的双引号
+                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                      return '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    return value;
+                  });
+                  csvContent += rowValues.join(',') + '\n';
+                });
+                
+                // 创建Blob对象
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                
+                // 创建下载链接
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                // 设置文件名
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+                const filename = `query-result-${timestamp}.csv`;
+                
+                // 设置下载链接属性
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.display = 'none';
+                
+                // 添加到文档并触发点击
+                document.body.appendChild(link);
+                link.click();
+                
+                // 清理
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                isExporting.value = false;
+              } catch (error) {
+                console.error('导出CSV失败:', error);
+                alert('导出CSV失败: ' + error.message);
+                isExporting.value = false;
+              }
+            }, 100);
+          } catch (error) {
+            console.error('导出CSV失败:', error);
+            alert('导出CSV失败: ' + error.message);
+            isExporting.value = false;
+          }
+        };
+
+        // 监听选项卡变化
+        watch(activeTab, (newTab) => {
+          if (newTab === 'tables') {
+            fetchTables();
+          }
+        });
+
+        return {
+          activeTab,
+          tables,
+          selectedTable,
+          tableSchema,
+          tableData,
+          showSchema,
+          databaseInfo,
+          pagination,
+          sqlQuery,
+          queryResult,
+          queryExecuted,
+          queryError,
+          queryChanges,
+          queryLastId,
+          sqlHistory,
+          showSqlHistory,
+          maxHistoryItems,
+          isExporting,
+          importStep,
+          selectedFile,
+          excelData,
+          importTableName,
+          columnConfig,
+          importError,
+          importResult,
+          fileInput,
+          selectTable,
+          refreshTableData,
+          changePage,
+          executeQuery,
+          handleFileChange,
+          uploadExcel,
+          importExcel,
+          resetImport,
+          uploadError,
+          isUploading,
+          importConfigError,
+          isImporting,
+          addNewColumn,
+          removeColumn,
+          showChatPanel,
+          chatMessages,
+          userMessage,
+          llmToken,
+          llmUrl,
+          llmModel,
+          chatError,
+          isTyping,
+          showTokenConfig,
+          openTokenConfig,
+          saveToken,
+          sendMessage,
+          useSqlFromAssistant,
+          chatMessagesRef,
+          saveSqlToHistory,
+          loadSqlFromHistory,
+          clearSqlHistory,
+          exportToCsv
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html> 
